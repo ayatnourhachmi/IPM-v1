@@ -15,8 +15,11 @@ services:
         value: production
       - key: DEBUG
         value: false
+      # CORS_ORIGINS must list your exact Vercel URL if not using *.vercel.app (default regex in prod).
       - key: CORS_ORIGINS
         value: http://localhost:3000,https://your-app.vercel.app
+      - key: CHROMA_ENABLED
+        value: "false"
       - key: LLM_PROVIDER
         value: groq
       - key: GROQ_API_KEY

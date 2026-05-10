@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.core.chroma import get_collection
+from app.core.config import settings
 from app.core.embedding_client import embed_text
 from app.schemas.business_need import DuplicateMatch
 
@@ -16,6 +17,9 @@ MAX_RESULTS = 3
 
 def upsert_embedding(need_id: str, pitch: str, status: str, embedding: list[float] | None = None) -> None:
     """Upsert a pitch embedding into ChromaDB. Computes the embedding if not provided."""
+    if not settings.chroma_enabled:
+        logger.info("ChromaDB disabled: skipping upsert for %s", need_id)
+        return
     if embedding is None:
         embedding = embed_text(pitch, is_query=False)
     collection = get_collection()
@@ -30,6 +34,8 @@ def upsert_embedding(need_id: str, pitch: str, status: str, embedding: list[floa
 
 def search_duplicates(pitch: str, exclude_id: str | None = None, embedding: list[float] | None = None) -> list[DuplicateMatch]:
     """Search ChromaDB for business needs similar to the given pitch. Reuses embedding if provided."""
+    if not settings.chroma_enabled:
+        return []
     if embedding is None:
         embedding = embed_text(pitch, is_query=False)
     collection = get_collection()

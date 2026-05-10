@@ -587,35 +587,42 @@ async def create_need(
 ) -> BusinessNeedResponse:
     """Create a new business need with AI enrichment and duplicate detection."""
     try:
-        # 1. Generate embedding and reuse precomputed tags when provided by the client.
-        if request.tags is not None:
-            tags = request.tags
-            embedding = await embed_text_async(request.pitch, is_query=False)
+        # 1. Tags + optional embeddings. Local embeddings + Chroma duplicate search require
+        # docker-style ChromaDB; single-service deploys should set CHROMA_ENABLED=false.
+        if settings.chroma_enabled:
+            if request.tags is not None:
+                tags = request.tags
+                embedding = await embed_text_async(request.pitch, is_query=False)
+            else:
+                (tags, _suggestions), embedding = await asyncio.gather(
+                    nlp_service.analyze_pitch(request.pitch),
+                    embed_text_async(request.pitch, is_query=False),
+                )
         else:
-            # Fallback: run LLM tagging + embedding concurrently.
-            (tags, _suggestions), embedding = await asyncio.gather(
-                nlp_service.analyze_pitch(request.pitch),
-                embed_text_async(request.pitch, is_query=False),
-            )
+            if request.tags is not None:
+                tags = request.tags
+            else:
+                tags, _suggestions = await nlp_service.analyze_pitch(request.pitch)
 
         # 2. Generate unique ID
         need_id = await id_service.generate_id(db)
 
-        # 3. Upsert + duplicate search run concurrently. Both are blocking HTTP calls
-        # to ChromaDB — offload to threads so they overlap instead of serializing.
-        # `exclude_id=need_id` filters the just-upserted doc from results.
-        _, duplicates = await asyncio.gather(
-            asyncio.to_thread(
-                embedding_service.upsert_embedding,
-                need_id, request.pitch, "draft", embedding,
-            ),
-            asyncio.to_thread(
-                embedding_service.search_duplicates,
-                request.pitch, need_id, embedding,
-            ),
-        )
+        # 3. Chroma upsert + duplicate search (skipped when chroma_enabled is False).
+        if settings.chroma_enabled:
+            _, duplicates = await asyncio.gather(
+                asyncio.to_thread(
+                    embedding_service.upsert_embedding,
+                    need_id, request.pitch, "draft", embedding,
+                ),
+                asyncio.to_thread(
+                    embedding_service.search_duplicates,
+                    request.pitch, need_id, embedding,
+                ),
+            )
+        else:
+            duplicates = []
 
-        # 5. Persist to PostgreSQL
+        # 4. Persist to PostgreSQL
         constraints = _derive_constraints(tags)
         need = BusinessNeed(
             id=need_id,
@@ -766,6 +773,10 @@ async def catalog_search(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Business need '{need_id}' not found.",
             )
+
+        if not settings.chroma_enabled:
+            logger.info("ChromaDB disabled: returning empty catalog results for %s", need_id)
+            return CatalogSearchResponse(results=[], total=0)
 
         # Build query text from pitch + AI-derived fields
         tags: dict = need.tags or {}

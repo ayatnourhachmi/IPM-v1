@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     cors_origins_raw: str = Field(default="http://localhost:3000", env="CORS_ORIGINS")
 
     # --- ChromaDB ---
+    # Set CHROMA_ENABLED=false on single-process hosts (e.g. Render without a Chroma sidecar).
+    chroma_enabled: bool = True
     chroma_host: str = "chromadb"
     chroma_port: int = 8001
 
