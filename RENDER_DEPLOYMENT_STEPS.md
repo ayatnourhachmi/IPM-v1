@@ -51,6 +51,14 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 7. Wait for deployment to complete
 8. Once live, note your **Render URL** (e.g., `https://ipm-api-xxxxx.onrender.com`)
 
+If Render only shows a generic Python 3 runtime, add this environment variable before deploying:
+
+```
+PYTHON_VERSION=3.11.9
+```
+
+That avoids the `pydantic-core` source-build failure on the default runtime.
+
 ---
 
 ## Step 3: Deploy Frontend on Vercel
