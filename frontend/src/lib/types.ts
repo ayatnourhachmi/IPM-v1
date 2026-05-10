@@ -130,6 +130,9 @@ export interface CatalogProduct {
 export interface CatalogSearchResponse {
     results: CatalogProduct[];
     total: number;
+    /** Pinecone dxc_catalog vector count (debugging empty results) */
+    catalog_vectors?: number;
+    hint?: string | null;
 }
 
 export interface EvaluationScores {

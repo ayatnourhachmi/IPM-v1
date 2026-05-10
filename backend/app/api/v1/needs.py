@@ -776,7 +776,12 @@ async def catalog_search(
 
         if not settings.pinecone_configured:
             logger.info("Pinecone not configured — returning empty catalog results for %s", need_id)
-            return CatalogSearchResponse(results=[], total=0)
+            return CatalogSearchResponse(
+                results=[],
+                total=0,
+                catalog_vectors=0,
+                hint="Pinecone is not configured on the API. Set PINECONE_API_KEY and PINECONE_INDEX on Render, then redeploy.",
+            )
 
         # Build query text from pitch + AI-derived fields
         tags: dict = need.tags or {}
@@ -812,10 +817,8 @@ async def catalog_search(
         # Embed — is_query=True applies the BGE retrieval prefix
         embedding = await embed_text_async(query_text, is_query=True)
 
-        pool = min(
-            CATALOG_FETCH_CAP,
-            max(1, namespace_vector_count(NS_DXC_CATALOG)),
-        )
+        cat_vector_count = namespace_vector_count(NS_DXC_CATALOG)
+        pool = min(CATALOG_FETCH_CAP, max(1, cat_vector_count))
         pine_rows = query_catalog(embedding, top_k=pool)
 
         def _meta_val(meta: dict, key: str) -> str | None:
@@ -861,7 +864,28 @@ async def catalog_search(
         products.sort(key=lambda p: p.relevance_score, reverse=True)
         products = products[:CATALOG_RETURN_CAP]
 
-        return CatalogSearchResponse(results=products, total=len(products))
+        hint: str | None = None
+        if not products:
+            if cat_vector_count == 0:
+                hint = (
+                    "Catalog is not indexed in Pinecone (0 vectors in dxc_catalog). "
+                    "Confirm PINECONE_* env vars, then check Render logs for "
+                    "'Catalog seeding complete' or seed errors after deploy."
+                )
+            elif pine_rows:
+                hint = (
+                    "Similar catalog rows were retrieved but none passed the overlap filter "
+                    "for this need. Try enriching the pitch or tags, then launch again."
+                )
+            else:
+                hint = "No neighbors from the vector search—re-run after confirming the catalog index."
+
+        return CatalogSearchResponse(
+            results=products,
+            total=len(products),
+            catalog_vectors=cat_vector_count,
+            hint=hint,
+        )
 
     except HTTPException:
         raise

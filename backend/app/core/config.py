@@ -1,7 +1,7 @@
 """Pydantic Settings — all environment variables for the IPM backend."""
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 
 class Settings(BaseSettings):
@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     pinecone_api_key: str = ""
     pinecone_index_name: str = Field(default="", env="PINECONE_INDEX")
     pinecone_cloud: str = Field(default="aws", env="PINECONE_CLOUD")
-    pinecone_region: str = Field(default="us-east-1", env="PINECONE_REGION")
+    # Accept legacy PINECONE_ENVIRONMENT (older docs) as fallback for serverless region.
+    pinecone_region: str = Field(
+        default="us-east-1",
+        validation_alias=AliasChoices("PINECONE_REGION", "PINECONE_ENVIRONMENT"),
+    )
     pinecone_index_dimension: int = Field(default=384, env="PINECONE_INDEX_DIMENSION")
     pinecone_auto_create_index: bool = Field(default=False, env="PINECONE_AUTO_CREATE_INDEX")
     pinecone_seed_catalog_on_startup: bool = Field(default=True, env="PINECONE_SEED_CATALOG_ON_STARTUP")

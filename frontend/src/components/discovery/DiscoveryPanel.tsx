@@ -134,6 +134,7 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
     const [catalog1Items, setCatalog1Items] = useState<DiscoveryItem[]>([]);
     const [catalog1Products, setCatalog1Products] = useState<CatalogProduct[]>([]);
     const [catalog1Loading, setCatalog1Loading] = useState(false);
+    const [catalogSearchHint, setCatalogSearchHint] = useState<string | null>(null);
     const [gapAnalysis, setGapAnalysis] = useState<GapState>({
         itemId: null, data: null, loading: false, error: false,
     });
@@ -183,8 +184,10 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
         setCardState("dxc_catalog", "active");
         if (!needId) return;
         setCatalog1Loading(true);
+        setCatalogSearchHint(null);
         try {
             const resp = await searchCatalog(needId);
+            setCatalogSearchHint(resp.hint ?? null);
             setCatalog1Items(resp.results.map(p => ({
                 id: p.id,
                 name: p.name,
@@ -348,6 +351,17 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
                                 {catalog1Loading ? (
                                     <div className="disc-item" style={{ justifyContent: "center", borderBottom: "none" }}>
                                         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading catalog…</span>
+                                    </div>
+                                ) : catalog1Items.length === 0 ? (
+                                    <div className="disc-item" style={{ flexDirection: "column", alignItems: "flex-start", borderBottom: "none", gap: 6 }}>
+                                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                                            No catalog matches returned.
+                                        </span>
+                                        {catalogSearchHint && (
+                                            <span style={{ fontSize: 12, color: "#c9a227", lineHeight: 1.45 }}>
+                                                {catalogSearchHint}
+                                            </span>
+                                        )}
                                     </div>
                                 ) : (
                                     catalog1Items.map((item) => (

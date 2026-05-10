@@ -241,6 +241,10 @@ class CatalogSearchResponse(BaseModel):
 
     results: list[CatalogProduct]
     total: int
+    #: Vectors stored in Pinecone ``dxc_catalog`` namespace (0 = not indexed / misconfigured).
+    catalog_vectors: int = 0
+    #: Shown when ``total`` is 0 so operators know whether to re-seed vs refine the need.
+    hint: str | None = None
 
 
 def _coerce_solution_features(value: object) -> list[str]:
