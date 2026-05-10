@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 import logging
-import re
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
