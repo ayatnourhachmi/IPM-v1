@@ -51,9 +51,26 @@ async def run_async_migrations() -> None:
     from app.core.config import settings
 
     # Always follow the app's DATABASE_URL — not only alembic.ini (Docker/local parity).
+    # Some connection strings include query params like `?sslmode=require` which
+    # asyncpg.connect does not accept as a keyword argument. Sanitize the URL
+    # by removing `sslmode` and translate it into a proper `ssl` connect arg.
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+    raw_url = settings.database_url
+    split = urlsplit(raw_url)
+    query_items = dict(parse_qsl(split.query))
+    sslmode = query_items.pop("sslmode", None)
+    new_query = urlencode(query_items)
+    sanitized_url = urlunsplit((split.scheme, split.netloc, split.path, new_query, split.fragment))
+
+    connect_args = {}
+    if sslmode:
+        connect_args["ssl"] = True
+
     connectable = create_async_engine(
-        settings.database_url,
+        sanitized_url,
         poolclass=pool.NullPool,
+        connect_args=connect_args or None,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
