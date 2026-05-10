@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -129,12 +131,17 @@ app = FastAPI(
 )
 
 # --- CORS ---
+allow_origin_regex = os.getenv("CORS_ORIGIN_REGEX")
+if not allow_origin_regex and settings.environment == "production":
+    allow_origin_regex = r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origin_regex=allow_origin_regex,
 )
 
 # --- Routes ---
