@@ -1,17 +1,14 @@
-"""Seed ChromaDB with 20 synthetic business needs for demo and duplicate detection."""
+"""Seed Pinecone ``business_needs`` namespace with synthetic demo rows (dev only)."""
 
 from __future__ import annotations
 
 import logging
 
-from app.core.chroma import get_collection
+from app.core.config import settings
 from app.core.embedding_client import embed_texts
+from app.core.pinecone_store import ensure_pinecone_index_ready, namespace_vector_count, NS_BUSINESS_NEEDS, upsert_need_vectors
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# 20 realistic synthetic business needs (French, DXC innovation context)
-# ---------------------------------------------------------------------------
 
 SEED_NEEDS: list[dict[str, str | list[str] | dict]] = [
     {
@@ -157,28 +154,36 @@ SEED_NEEDS: list[dict[str, str | list[str] | dict]] = [
 ]
 
 
-def seed_chromadb() -> None:
-    """Insert 20 synthetic business needs into ChromaDB if the collection is empty."""
-    collection = get_collection()
-
-    if collection.count() > 0:
-        logger.info("ChromaDB collection already seeded (%d entries), skipping.", collection.count())
+def seed_demo_business_needs() -> None:
+    """Insert synthetic pitches into Pinecone when the ``business_needs`` namespace is empty."""
+    if not settings.pinecone_configured:
+        logger.info("Pinecone not configured — skip demo vectors seed")
         return
 
-    logger.info("Seeding ChromaDB with %d synthetic business needs...", len(SEED_NEEDS))
+    ensure_pinecone_index_ready()
 
-    pitches = [need["pitch"] for need in SEED_NEEDS]
-    ids = [need["id"] for need in SEED_NEEDS]
-    metadatas = [{"status": need["status"]} for need in SEED_NEEDS]
+    n_existing = namespace_vector_count(NS_BUSINESS_NEEDS)
+    if n_existing > 0:
+        logger.info(
+            "Pinecone namespace %r already has %d vectors — skip demo seed.",
+            NS_BUSINESS_NEEDS,
+            n_existing,
+        )
+        return
 
-    # Batch embed all pitches
-    embeddings = embed_texts(pitches)  # type: ignore[arg-type]
+    logger.info("Seeding Pinecone with %d synthetic business needs...", len(SEED_NEEDS))
 
-    collection.add(
-        ids=ids,  # type: ignore[arg-type]
-        embeddings=embeddings,
-        documents=pitches,  # type: ignore[arg-type]
-        metadatas=metadatas,  # type: ignore[arg-type]
-    )
+    pitches = [str(need["pitch"]) for need in SEED_NEEDS]
+    embeddings = embed_texts(pitches)
+    vectors: list[dict] = []
+    for need, emb in zip(SEED_NEEDS, embeddings, strict=True):
+        vectors.append(
+            {
+                "id": str(need["id"]),
+                "values": emb,
+                "metadata": {"pitch": str(need["pitch"]), "status": str(need["status"])},
+            }
+        )
 
-    logger.info("ChromaDB seeded successfully with %d entries.", len(SEED_NEEDS))
+    upsert_need_vectors(vectors)
+    logger.info("Pinecone demo seed finished (%s vectors).", len(vectors))

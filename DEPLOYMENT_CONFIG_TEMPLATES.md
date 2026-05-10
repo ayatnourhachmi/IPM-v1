@@ -184,8 +184,6 @@ services:
     ports: ["8000:8000"]
     environment:
       - DATABASE_URL=postgresql+asyncpg://ipm:ipm@postgres:5432/ipm
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
@@ -197,11 +195,13 @@ services:
       - EMBEDDING_PROVIDER=local
       - ENVIRONMENT=development
       - DEBUG=true
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-ipm-local}
+      - PINECONE_AUTO_CREATE_INDEX=${PINECONE_AUTO_CREATE_INDEX:-true}
+      - PINECONE_SEED_CATALOG_ON_STARTUP=true
     depends_on:
       postgres:
         condition: service_healthy
-      chromadb:
-        condition: service_started
       minio:
         condition: service_started
     volumes:
@@ -223,16 +223,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - ipm-network
-
-  chromadb:
-    image: chromadb/chroma:0.5.15
-    ports: ["8001:8000"]
-    volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
     networks:
       - ipm-network
 
@@ -266,7 +256,6 @@ services:
 
 volumes:
   pg_data:
-  chroma_data:
   minio_data:
 
 networks:
@@ -408,7 +397,7 @@ dev:
 	@echo "  Backend:   http://localhost:8000"
 	@echo "  API Docs:  http://localhost:8000/docs"
 	@echo "  MinIO:     http://localhost:9001"
-	@echo "  ChromaDB:  http://localhost:8001"
+	@echo "  Pinecone:  vectors hosted in Pinecone (${PINECONE_INDEX:-unset index})"
 
 stop:
 	@echo "Stopping all services..."
@@ -424,9 +413,9 @@ migrate:
 	docker exec ipm-v0-api-1 alembic upgrade head
 
 seed:
-	@echo "Seeding database..."
-	docker exec ipm-v0-api-1 python -m app.seeds.seed_chroma
-	docker exec ipm-v0-api-1 python -m app.core.seed_catalog
+	@echo "Re-seeding Pinecone namespaces (needs compose env PINECONE_*) ..."
+	docker compose exec api python -c "from app.core.seed_catalog import seed_catalog; seed_catalog()"
+	docker compose exec api python -c "from app.seeds.seed_pinecone import seed_demo_business_needs; seed_demo_business_needs()"
 
 logs:
 	docker-compose logs -f
@@ -461,8 +450,12 @@ postgresql+asyncpg://postgres:[password]@db.[region].supabase.co:5432/postgres
 ```
 Go to: https://app.pinecone.io/
 
-API Key: Settings → API Keys
-Environment: Your region (e.g., us-east1-gcp)
+1. Settings → API Keys → copy PINECONE_API_KEY
+2. Create a serverless index: metric cosine, dimension 384 (BGE-small-en-v1.5 default)
+   Set PINECONE_INDEX to that index name.
+3. Set PINECONE_REGION / PINECONE_CLOUD (e.g. us-east-1 + aws) if using auto-create
+   (PINECONE_AUTO_CREATE_INDEX=true), or match the console region manually.
+Namespaces `business_needs` and `dxc_catalog` are created on first upsert by the API.
 ```
 
 ### For AWS S3
@@ -540,7 +533,7 @@ GRANT ALL ON SCHEMA public TO service_role;
 - [ ] Create `vercel.json` in project root
 - [ ] Create Makefile in project root
 - [ ] Update `docker-compose.yml`
-- [ ] Update `backend/requirements.txt` (swap minio/chroma as needed)
+- [ ] Update `backend/requirements.txt` (pinecone SDK + embeddings stack)
 - [ ] Set up GitHub Actions workflows
 - [ ] Get all API keys and service credentials
 - [ ] Test locally with docker-compose

@@ -1,12 +1,12 @@
-"""Embedding service — embed, upsert, and search business needs in ChromaDB."""
+"""Embedding service — embed, upsert, and search business needs in Pinecone."""
 
 from __future__ import annotations
 
 import logging
 
-from app.core.chroma import get_collection
 from app.core.config import settings
 from app.core.embedding_client import embed_text
+from app.core.pinecone_store import NS_BUSINESS_NEEDS, query_similar_needs, upsert_need_vectors
 from app.schemas.business_need import DuplicateMatch
 
 logger = logging.getLogger(__name__)
@@ -16,59 +16,48 @@ MAX_RESULTS = 3
 
 
 def upsert_embedding(need_id: str, pitch: str, status: str, embedding: list[float] | None = None) -> None:
-    """Upsert a pitch embedding into ChromaDB. Computes the embedding if not provided."""
-    if not settings.chroma_enabled:
-        logger.info("ChromaDB disabled: skipping upsert for %s", need_id)
+    """Upsert a pitch embedding into Pinecone ``business_needs`` namespace."""
+    if not settings.pinecone_configured:
+        logger.info("Pinecone not configured — skipping upsert for %s", need_id)
         return
     if embedding is None:
         embedding = embed_text(pitch, is_query=False)
-    collection = get_collection()
-    collection.upsert(
-        ids=[need_id],
-        embeddings=[embedding],
-        documents=[pitch],
-        metadatas=[{"status": status}],
+
+    upsert_need_vectors(
+        [
+            {
+                "id": need_id,
+                "values": embedding,
+                "metadata": {"pitch": pitch, "status": str(status)},
+            }
+        ]
     )
-    logger.info("Upserted embedding for %s into ChromaDB", need_id)
+    logger.info("Upserted embedding for %s into Pinecone/%s", need_id, NS_BUSINESS_NEEDS)
 
 
-def search_duplicates(pitch: str, exclude_id: str | None = None, embedding: list[float] | None = None) -> list[DuplicateMatch]:
-    """Search ChromaDB for business needs similar to the given pitch. Reuses embedding if provided."""
-    if not settings.chroma_enabled:
+def search_duplicates(
+    pitch: str,
+    exclude_id: str | None = None,
+    embedding: list[float] | None = None,
+) -> list[DuplicateMatch]:
+    """Find similar business needs in Pinecone (cosine similarity ≥ threshold)."""
+    if not settings.pinecone_configured:
         return []
+
     if embedding is None:
         embedding = embed_text(pitch, is_query=False)
-    collection = get_collection()
 
-    # Query more results than needed to account for excluding self
-    n_results = MAX_RESULTS + (1 if exclude_id else 0)
-    total = collection.count()
-    if total == 0:
-        return []
-    results = collection.query(
-        query_embeddings=[embedding],
-        n_results=min(n_results, total),
-        include=["documents", "metadatas", "distances"],
-    )
-
-    if not results or not results["ids"] or not results["ids"][0]:
-        return []
+    fetch_k = max(MAX_RESULTS + 2, MAX_RESULTS + (2 if exclude_id else 1))
+    rows = query_similar_needs(embedding, top_k=fetch_k, exclude_id=exclude_id)
 
     matches: list[DuplicateMatch] = []
-    for i, doc_id in enumerate(results["ids"][0]):
-        if doc_id == exclude_id:
-            continue
-
-        # ChromaDB returns cosine distance; similarity = 1 - distance
-        distance = results["distances"][0][i] if results["distances"] else 1.0
-        similarity = 1.0 - distance
-
+    for doc_id, similarity, _meta, pitch_text in rows:
         if similarity >= SIMILARITY_THRESHOLD:
             matches.append(
                 DuplicateMatch(
                     id=doc_id,
-                    pitch=results["documents"][0][i] if results["documents"] else "",
-                    status=results["metadatas"][0][i].get("status", "unknown") if results["metadatas"] else "unknown",
+                    pitch=pitch_text or "",
+                    status=str(_meta.get("status", "unknown")),
                     similarity_score=round(similarity, 4),
                 )
             )

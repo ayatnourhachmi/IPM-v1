@@ -1,7 +1,7 @@
 """Pydantic Settings — all environment variables for the IPM backend."""
 
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -24,21 +24,20 @@ class Settings(BaseSettings):
     # attempting JSON decoding of complex types during env parsing.
     cors_origins_raw: str = Field(default="http://localhost:3000", env="CORS_ORIGINS")
 
-    # --- ChromaDB ---
-    # Set CHROMA_ENABLED=false on single-process hosts (e.g. Render without a Chroma sidecar).
-    chroma_enabled: bool = True
-    chroma_host: str = "chromadb"
-    chroma_port: int = 8001
-
     # --- MinIO ---
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_secure: bool = False
 
-    # --- Vector DB ---
+    # --- Pinecone (vector store; replaces ChromaDB) ---
     pinecone_api_key: str = ""
-    pinecone_environment: str = "us-east1-gcp"
+    pinecone_index_name: str = Field(default="", env="PINECONE_INDEX")
+    pinecone_cloud: str = Field(default="aws", env="PINECONE_CLOUD")
+    pinecone_region: str = Field(default="us-east-1", env="PINECONE_REGION")
+    pinecone_index_dimension: int = Field(default=384, env="PINECONE_INDEX_DIMENSION")
+    pinecone_auto_create_index: bool = Field(default=False, env="PINECONE_AUTO_CREATE_INDEX")
+    pinecone_seed_catalog_on_startup: bool = Field(default=True, env="PINECONE_SEED_CATALOG_ON_STARTUP")
 
     # --- LLM Provider ---
     llm_provider: str = "groq"  # "groq" | "azure"
@@ -75,6 +74,11 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return value
         return [str(value)]
+
+    @property
+    def pinecone_configured(self) -> bool:
+        """True when API key and index name are set (vectors + catalog search enabled)."""
+        return bool(self.pinecone_api_key.strip() and self.pinecone_index_name.strip())
 
 
 settings = Settings()

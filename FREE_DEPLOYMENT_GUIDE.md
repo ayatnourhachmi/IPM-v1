@@ -42,8 +42,8 @@ Not required from you if I am editing the repo:
 ├─────────────────┤
 │ Frontend (3000) │
 │ Backend (8000)  │  → PostgreSQL (5432)
-│ ChromaDB (8001) │  → MinIO (9000)
-│ MinIO Console   │  → Langfuse
+│                 │  → Pinecone (vectors; external)
+│ MinIO (9000)    │  → MinIO console / Langfuse
 └─────────────────┘
 ```
 

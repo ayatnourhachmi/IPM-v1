@@ -65,7 +65,7 @@ pydantic==2.9.2              # Data validation
 groq==0.11.0                 # LLM provider
 openai==1.51.0               # OpenAI support (optional)
 langfuse==2.53.3             # Observability
-chromadb==0.5.15             # Vector DB
+pinecone>=5.4.0,<9         # Vector DB (Pinecone; serverless index)
 sentence-transformers==3.1.1 # Embeddings
 minio==7.2.9                 # S3-compatible storage
 ```
@@ -80,7 +80,7 @@ minio==7.2.9                 # S3-compatible storage
 - **`needs.py`** — Business needs API endpoints (all business logic routes)
 - **`__init__.py`** — Package marker (empty)
 
-#### Core Services: `app/core/` (12 files)
+#### Core Services: `app/core/` (13 files)
 
 | File | Purpose |
 |------|---------|
@@ -88,8 +88,8 @@ minio==7.2.9                 # S3-compatible storage
 | `database.py` | SQLAlchemy async engine, session factory, `get_db()` |
 | `embedding_client.py` | Embedding API (local or remote) |
 | `llm_client.py` | LLM provider abstraction (Groq, Azure OpenAI) |
-| `llm_client.py` | Intent prompt builder for NLP classification |
-| `chroma.py` | ChromaDB async client & collection access |
+| `intent_prompt.py` | Builds intent section of LLM prompts (used by `llm_client`) |
+| `pinecone_store.py` | Pinecone client; namespaces `business_needs`, `dxc_catalog` |
 | `langfuse_tracking.py` | Observability/LLM tracking integration |
 | `minio_client.py` | S3-compatible file storage |
 | `seed_catalog.py` | Catalog initialization on startup |
@@ -145,7 +145,7 @@ minio==7.2.9                 # S3-compatible storage
 
 | File | Purpose |
 |------|---------|
-| `seed_chroma.py` | Initialize ChromaDB with embeddings |
+| `seed_pinecone.py` | Optional demo vectors in Pinecone `business_needs` namespace (dev) |
 | `__init__.py` — Package marker |
 
 #### Assets: `app/assets/` (2 files)
@@ -314,8 +314,8 @@ minio==7.2.9                 # S3-compatible storage
 **Services**:
 1. **api** (Python/FastAPI)
    - Port: 8000
-   - Environment: DB, ChromaDB, MinIO, LLM config
-   - Depends on: postgres, chromadb, minio
+   - Environment: DB, MinIO, LLM config, **Pinecone** (`PINECONE_*`)
+   - Depends on: postgres, minio
    - Volume: `./backend:/app`
 
 2. **postgres** (PostgreSQL 15-alpine)
@@ -323,16 +323,14 @@ minio==7.2.9                 # S3-compatible storage
    - Database: ipm
    - Health checks enabled
 
-3. **chromadb** (Vector database)
-   - Port: 8000 (internal)
-
-4. **minio** (S3-compatible storage)
+3. **minio** (S3-compatible storage)
    - Port: 9000
    - Default credentials: minioadmin/minioadmin
 
+**Vectors (Pinecone)** — managed separately (not a Docker service in this compose file). Namespaces used: `business_needs`, `dxc_catalog`. Set `PINECONE_API_KEY`, `PINECONE_INDEX`, and related env vars on the API service.
+
 **Data Volumes** (in .gitignore):
 - `pg_data/` — PostgreSQL data
-- `chroma_data/` — ChromaDB persistence
 - `minio_data/` — MinIO object storage
 
 ---
@@ -394,7 +392,8 @@ backend/
 │   ├── embedding_client.py
 │   ├── llm_client.py
 │   ├── intent_prompt.py
-│   ├── chroma.py
+│   ├── intent_prompt.py
+│   ├── pinecone_store.py
 │   ├── langfuse_tracking.py
 │   ├── minio_client.py
 │   ├── seed_catalog.py
@@ -428,7 +427,7 @@ backend/
 │   └── validation_guards.py
 ├── app/seeds/
 │   ├── __init__.py
-│   └── seed_chroma.py
+│   └── seed_pinecone.py
 ├── app/assets/
 │   ├── .gitkeep
 │   └── dxc_logo.png
@@ -509,7 +508,6 @@ frontend/src/
 | `alembic/versions/__pycache__/` | Migration bytecode | ~1 MB |
 | `.vercel/` | Vercel deployment metadata | <1 MB |
 | `pg_data/` | PostgreSQL data (Docker volume) | Varies |
-| `chroma_data/` | ChromaDB data (Docker volume) | Varies |
 | `minio_data/` | MinIO object storage (Docker volume) | Varies |
 
 **All properly excluded by `.gitignore`**
@@ -550,7 +548,7 @@ main.py
 api.v1.needs.py (main business logic hub)
 ├── core.llm_client
 ├── core.embedding_client
-├── core.chroma
+├── core.pinecone_store
 ├── core.database
 ├── core.config
 ├── models.business_need
@@ -596,8 +594,8 @@ api.v1.needs.py (main business logic hub)
 | **React Pages** | 8 |
 | **React Components** | 20+ |
 | **Services** | 15 |
-| **Core Modules** | 12 |
-| **Docker Services** | 4 |
+| **Core Modules** | ~13 |
+| **Docker Services** | 3 (API, Postgres, MinIO — Pinecone is external) |
 | **Total Lines of Config** | ~200+ |
 
 ---
@@ -610,7 +608,7 @@ api.v1.needs.py (main business logic hub)
 4. **Observability**: Langfuse integration for LLM tracking
 5. **Catalog-Driven**: All recommendations based on `catalog.xlsx` loaded at startup
 6. **Multi-LLM Support**: Can switch between Groq/OpenAI/Azure OpenAI via config
-7. **Docker-First**: Development uses docker-compose with 4 services (API, Postgres, ChromaDB, MinIO)
+7. **Docker-First**: Development uses docker-compose with three services (API, Postgres, MinIO); Pinecone vectors are hosted outside compose.
 
 ---
 

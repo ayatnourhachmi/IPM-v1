@@ -60,47 +60,54 @@ async def _ensure_business_needs_schema(async_conn) -> None:
 
 
 async def _run_post_startup_tasks() -> None:
-    """Run heavy non-critical startup work without blocking API readiness.
-    
-    On free tier (production), skip resource-intensive tasks to avoid OOM crashes.
-    """
-    if settings.environment == "production":
-        logger.info("Production mode: skipping heavy startup tasks (embedding warmup, seeding) on free tier.")
-        return
+    """Run heavy non-critical startup work without blocking API readiness."""
+    is_prod = settings.environment == "production"
 
-    # 1. Warm up embedding model (can be slow on first run due to model download)
-    try:
-        from app.core.embedding_client import _get_local_model
+    # Local dev — warm embeddings before concurrent requests arrive.
+    if not is_prod:
+        try:
+            from app.core.embedding_client import _get_local_model
 
-        await asyncio.to_thread(_get_local_model)
-        logger.info("Embedding model warmed up.")
-    except Exception as exc:
-        logger.warning("Embedding model warmup failed (non-fatal): %s", exc)
+            await asyncio.to_thread(_get_local_model)
+            logger.info("Embedding model warmed up.")
+        except Exception as exc:
+            logger.warning("Embedding model warmup failed (non-fatal): %s", exc)
 
-    # 2. Seed ChromaDB with synthetic data
-    try:
-        from app.seeds.seed_chroma import seed_chromadb
+    if settings.pinecone_configured:
+        try:
+            from app.core.pinecone_store import ensure_pinecone_index_ready
 
-        await asyncio.to_thread(seed_chromadb)
-    except Exception as exc:
-        logger.warning("ChromaDB seeding failed (non-fatal): %s", exc)
+            await asyncio.to_thread(ensure_pinecone_index_ready)
+            logger.info("Pinecone index check complete.")
+        except Exception as exc:
+            logger.warning("Pinecone index check failed (non-fatal): %s", exc)
 
-    # 3. Seed DXC product catalog into dxc_catalog collection
-    try:
-        from app.core.seed_catalog import seed_catalog
+        # Production: gated by PINECONE_SEED_CATALOG_ON_STARTUP (default true). Always in dev.
+        if (not is_prod) or settings.pinecone_seed_catalog_on_startup:
+            try:
+                from app.core.seed_catalog import seed_catalog
 
-        await asyncio.to_thread(seed_catalog)
-    except Exception as exc:
-        logger.warning("Catalog seeding failed (non-fatal): %s", exc)
+                await asyncio.to_thread(seed_catalog)
+            except Exception as exc:
+                logger.warning("Catalog vector seed failed (non-fatal): %s", exc)
 
-    # 4. Ensure MinIO bucket exists
-    try:
-        from app.core.minio_client import ensure_bucket
+    # Demo vectors only outside production.
+    if (not is_prod) and settings.pinecone_configured:
+        try:
+            from app.seeds.seed_pinecone import seed_demo_business_needs
 
-        await asyncio.to_thread(ensure_bucket)
-        logger.info("MinIO bucket ensured.")
-    except Exception as exc:
-        logger.warning("MinIO bucket creation failed (non-fatal): %s", exc)
+            await asyncio.to_thread(seed_demo_business_needs)
+        except Exception as exc:
+            logger.warning("Pinecone demo seed failed (non-fatal): %s", exc)
+
+    if not is_prod:
+        try:
+            from app.core.minio_client import ensure_bucket
+
+            await asyncio.to_thread(ensure_bucket)
+            logger.info("MinIO bucket ensured.")
+        except Exception as exc:
+            logger.warning("MinIO bucket creation failed (non-fatal): %s", exc)
 
 
 @asynccontextmanager

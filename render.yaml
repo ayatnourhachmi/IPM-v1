@@ -18,8 +18,6 @@ services:
       # CORS_ORIGINS must list your exact Vercel URL if not using *.vercel.app (default regex in prod).
       - key: CORS_ORIGINS
         value: http://localhost:3000,https://your-app.vercel.app
-      - key: CHROMA_ENABLED
-        value: "false"
       - key: LLM_PROVIDER
         value: groq
       - key: GROQ_API_KEY
@@ -28,8 +26,19 @@ services:
         value: local
       - key: PINECONE_API_KEY
         sync: false
-      - key: PINECONE_ENVIRONMENT
+      # Create the index manually in Pinecone (cosine, dim=384) or set AUTO_CREATE_INDEX true.
+      - key: PINECONE_INDEX
+        value: ipm-v1
+      - key: PINECONE_REGION
         value: us-east-1
+      - key: PINECONE_CLOUD
+        value: aws
+      - key: PINECONE_INDEX_DIMENSION
+        value: "384"
+      - key: PINECONE_AUTO_CREATE_INDEX
+        value: "false"
+      - key: PINECONE_SEED_CATALOG_ON_STARTUP
+        value: "true"
       - key: LANGFUSE_PUBLIC_KEY
         sync: false
       - key: LANGFUSE_SECRET_KEY

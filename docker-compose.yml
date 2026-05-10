@@ -5,8 +5,6 @@ services:
     ports: [ "8000:8000" ]
     environment:
       - DATABASE_URL=postgresql+asyncpg://ipm:ipm@postgres:5432/ipm
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
@@ -16,9 +14,12 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=https://cloud.langfuse.com
       - EMBEDDING_PROVIDER=local
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-ipm-local}
+      - PINECONE_AUTO_CREATE_INDEX=${PINECONE_AUTO_CREATE_INDEX:-true}
+      - PINECONE_SEED_CATALOG_ON_STARTUP=true
     depends_on:
       postgres: { condition: service_healthy }
-      chromadb: { condition: service_started }
       minio: { condition: service_started }
     volumes:
       - ./backend:/app
@@ -35,13 +36,6 @@ services:
       test: [ "CMD-SHELL", "pg_isready -U ipm" ]
       interval: 5s
       retries: 5
-
-  chromadb:
-    image: chromadb/chroma:0.5.15
-    ports: [ "8001:8000" ]
-    volumes: [ "chroma_data:/chroma/chroma" ]
-    environment:
-      - IS_PERSISTENT=TRUE
 
   minio:
     image: minio/minio:latest
@@ -65,5 +59,4 @@ services:
 
 volumes:
   pg_data:
-  chroma_data:
   minio_data:

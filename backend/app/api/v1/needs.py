@@ -53,7 +53,8 @@ from app.schemas.business_need import (
     UpdateStatusRequest,
 )
 
-from app.core.chroma import get_collection
+
+from app.core.pinecone_store import NS_DXC_CATALOG, namespace_vector_count, query_catalog
 from app.services import embedding_service, id_service, nlp_service
 from app.services.export_service import build_docx_report, build_pdf_report
 from app.services.catalog_feature_match import (
@@ -587,9 +588,8 @@ async def create_need(
 ) -> BusinessNeedResponse:
     """Create a new business need with AI enrichment and duplicate detection."""
     try:
-        # 1. Tags + optional embeddings. Local embeddings + Chroma duplicate search require
-        # docker-style ChromaDB; single-service deploys should set CHROMA_ENABLED=false.
-        if settings.chroma_enabled:
+        # 1. Tags + optional embeddings — Pinecone duplicate search (when configured).
+        if settings.pinecone_configured:
             if request.tags is not None:
                 tags = request.tags
                 embedding = await embed_text_async(request.pitch, is_query=False)
@@ -607,8 +607,8 @@ async def create_need(
         # 2. Generate unique ID
         need_id = await id_service.generate_id(db)
 
-        # 3. Chroma upsert + duplicate search (skipped when chroma_enabled is False).
-        if settings.chroma_enabled:
+        # 3. Upsert + duplicate search (skipped when Pinecone env is not set).
+        if settings.pinecone_configured:
             _, duplicates = await asyncio.gather(
                 asyncio.to_thread(
                     embedding_service.upsert_embedding,
@@ -741,8 +741,8 @@ async def update_status(
         # Update ChromaDB metadata
         try:
             embedding_service.upsert_embedding(need.id, need.pitch, need.status)
-        except Exception as chroma_exc:
-            logger.warning("Failed to update ChromaDB for %s: %s", need.id, chroma_exc)
+        except Exception as vec_exc:
+            logger.warning("Failed to update Pinecone vector for %s: %s", need.id, vec_exc)
 
         return _business_need_to_response(need)
 
@@ -774,8 +774,8 @@ async def catalog_search(
                 detail=f"Business need '{need_id}' not found.",
             )
 
-        if not settings.chroma_enabled:
-            logger.info("ChromaDB disabled: returning empty catalog results for %s", need_id)
+        if not settings.pinecone_configured:
+            logger.info("Pinecone not configured — returning empty catalog results for %s", need_id)
             return CatalogSearchResponse(results=[], total=0)
 
         # Build query text from pitch + AI-derived fields
@@ -812,35 +812,25 @@ async def catalog_search(
         # Embed — is_query=True applies the BGE retrieval prefix
         embedding = await embed_text_async(query_text, is_query=True)
 
-        # Query dxc_catalog — fetch a wider pool, then require feature-line overlap with the need
-        collection = get_collection("dxc_catalog")
-        pool = min(CATALOG_FETCH_CAP, max(1, int(collection.count())))
-        raw = collection.query(
-            query_embeddings=[embedding],
-            n_results=pool,
-            include=["metadatas", "documents", "distances"],
+        pool = min(
+            CATALOG_FETCH_CAP,
+            max(1, namespace_vector_count(NS_DXC_CATALOG)),
         )
-
-        ids = raw["ids"][0]
-        metadatas = raw["metadatas"][0]
-        documents = raw["documents"][0]
-        distances = raw["distances"][0]
+        pine_rows = query_catalog(embedding, top_k=pool)
 
         def _meta_val(meta: dict, key: str) -> str | None:
-            """Return None for empty-string sentinel values stored in ChromaDB."""
             v = meta.get(key)
             return None if (v is None or v == "") else str(v)
 
         def _meta_list(meta: dict, key: str) -> list[str]:
-            """Parse a comma-separated metadata value into a list."""
             raw = meta.get(key, "")
             if not raw:
                 return []
             return [item.strip() for item in str(raw).split(",") if item.strip()]
 
         products: list[CatalogProduct] = []
-        for pid, meta, doc, dist in zip(ids, metadatas, documents, distances):
-            score = round(max(0.0, min(1.0, 1.0 - dist)), 2)
+        for pid, meta, doc, cosine_sim in pine_rows:
+            score = round(max(0.0, min(1.0, cosine_sim)), 2)
             maturity = _meta_val(meta, "maturity")
             products.append(CatalogProduct(
                 id=pid,
@@ -849,7 +839,7 @@ async def catalog_search(
                 domain=_meta_val(meta, "domain"),
                 target_objective=_meta_val(meta, "target_objective"),
                 maturity=maturity,
-                maturity_level=maturity,        # alias for legacy clients
+                maturity_level=maturity,
                 client_sectors=_meta_list(meta, "client_sectors"),
                 complexity=_meta_val(meta, "complexity"),
                 ipm_stage=_meta_val(meta, "ipm_stage"),

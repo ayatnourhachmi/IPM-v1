@@ -34,7 +34,6 @@ Thumbs.db
 
 # Docker volumes
 pg_data/
-chroma_data/
 minio_data/
 
 # Alembic

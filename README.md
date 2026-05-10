@@ -179,7 +179,7 @@ Tables are created automatically at startup via `Base.metadata.create_all`.
 | Frontend | Next.js 14 App Router, React 18, TypeScript |
 | Backend | FastAPI, SQLAlchemy async, Pydantic v2 |
 | Database | PostgreSQL 15 |
-| Vector DB | ChromaDB 0.5 |
+| Vector DB | Pinecone (serverless; `business_needs`, `dxc_catalog` namespaces) |
 | Embeddings | Local `BAAI/bge-small-en-v1.5` or OpenAI |
 | LLM | Groq (`llama-3.3-70b-versatile`) or Azure OpenAI (GPT-4o) |
 | Observability | Langfuse (hosted prompts + traces; repo fallbacks when offline or outdated `nlp_tagging`) |
@@ -199,7 +199,8 @@ Then open:
 - Frontend: http://localhost:3000
 - API docs: http://localhost:8000/docs
 - MinIO UI: http://localhost:9001
-- ChromaDB: http://localhost:8001
+
+Set `PINECONE_*` in `.env` so the API can upsert vectors (see `.env.example`).
 
 Hot-reloading is enabled for both backend and frontend in development — code changes take effect without rebuilding.
 
@@ -236,8 +237,9 @@ npm run dev
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `CHROMA_HOST` | ChromaDB host |
-| `CHROMA_PORT` | ChromaDB port |
+| `PINECONE_API_KEY` | Pinecone API key (vectors + catalog) |
+| `PINECONE_INDEX` | Pinecone index name (cosine, dim must match embeddings) |
+| `PINECONE_REGION` / `PINECONE_CLOUD` | Serverless index region (e.g. `us-east-1`, `aws`) |
 | `MINIO_ENDPOINT` | MinIO endpoint |
 | `MINIO_ACCESS_KEY` | MinIO access key |
 | `MINIO_SECRET_KEY` | MinIO secret key |
@@ -328,6 +330,6 @@ Gap analysis, solution recommendations, and NLP flows can open Langfuse **parent
 
 - **Langfuse vs repo:** The implementation is consistent with the fallback prompts in the repository. If you use hosted prompts, update Langfuse when those fallbacks change — especially `nlp_tagging` fragments and JSON contracts for gap analysis and recommendations.
 - The first Docker build takes several minutes — the backend downloads and warms the local embedding model (`BAAI/bge-small-en-v1.5`).
-- If you change the DXC catalog Excel file, restart the API to re-seed ChromaDB and reload the capability context.
+- If you change the DXC catalog Excel file, restart the API to re-seed the Pinecone catalog namespace and reload the capability context.
 - The `nlp_cache` Postgres table persists analyzed pitches across restarts. To force a fresh analysis, delete the relevant row or wait for the 24 h TTL to expire.
 - Groq free tier has a 100k token/day limit. The debounce and cache are tuned to stay within this for normal development usage.
