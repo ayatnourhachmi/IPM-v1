@@ -162,6 +162,24 @@ app.include_router(api_v1_router)
 
 
 @app.get("/health")
-async def health_check() -> dict[str, str]:
-    """Return a simple health status."""
-    return {"status": "healthy", "service": "ipm-api"}
+async def health_check() -> dict[str, object]:
+    """Liveness plus non-secret Pinecone/env checks (helps debug Render env without a second URL)."""
+    return {
+        "status": "healthy",
+        "service": "ipm-api",
+        "environment": settings.environment,
+        "pinecone_api_key_present": bool(settings.pinecone_api_key.strip()),
+        "pinecone_index_present": bool(settings.pinecone_index_name.strip()),
+        "pinecone_configured": settings.pinecone_configured,
+    }
+
+
+@app.get("/health/configuration")
+async def health_configuration() -> dict[str, bool | str]:
+    """Non-secret wiring check — use after changing Render env vars (no API keys echoed)."""
+    return {
+        "environment": settings.environment,
+        "pinecone_api_key_present": bool(settings.pinecone_api_key.strip()),
+        "pinecone_index_present": bool(settings.pinecone_index_name.strip()),
+        "pinecone_configured": settings.pinecone_configured,
+    }

@@ -776,11 +776,22 @@ async def catalog_search(
 
         if not settings.pinecone_configured:
             logger.info("Pinecone not configured — returning empty catalog results for %s", need_id)
+            has_key = bool(settings.pinecone_api_key.strip())
+            has_idx = bool(settings.pinecone_index_name.strip())
+            parts: list[str] = []
+            if not has_key:
+                parts.append("PINECONE_API_KEY is missing or empty on the server.")
+            if not has_idx:
+                parts.append(
+                    'PINECONE_INDEX is missing or empty — in Render add key exactly PINECONE_INDEX '
+                    'with your index name from the Pinecone console (not PINECONE_INDEX_NAME).'
+                )
+            parts.append("Save Environment on Render → Manual Deploy so the API reloads env.")
             return CatalogSearchResponse(
                 results=[],
                 total=0,
                 catalog_vectors=0,
-                hint="Pinecone is not configured on the API. Set PINECONE_API_KEY and PINECONE_INDEX on Render, then redeploy.",
+                hint=" ".join(parts),
             )
 
         # Build query text from pitch + AI-derived fields
