@@ -738,7 +738,7 @@ async def update_status(
         await db.flush()
         await db.refresh(need)
 
-        # Update ChromaDB metadata
+        # Refresh Pinecone vector metadata (pitch/status)
         try:
             embedding_service.upsert_embedding(need.id, need.pitch, need.status)
         except Exception as vec_exc:
