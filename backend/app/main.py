@@ -60,7 +60,14 @@ async def _ensure_business_needs_schema(async_conn) -> None:
 
 
 async def _run_post_startup_tasks() -> None:
-    """Run heavy non-critical startup work without blocking API readiness."""
+    """Run heavy non-critical startup work without blocking API readiness.
+    
+    On free tier (production), skip resource-intensive tasks to avoid OOM crashes.
+    """
+    if settings.environment == "production":
+        logger.info("Production mode: skipping heavy startup tasks (embedding warmup, seeding) on free tier.")
+        return
+
     # 1. Warm up embedding model (can be slow on first run due to model download)
     try:
         from app.core.embedding_client import _get_local_model
