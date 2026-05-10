@@ -1,0 +1,69 @@
+services:
+
+  api:
+    build: ./backend
+    ports: [ "8000:8000" ]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://ipm:ipm@postgres:5432/ipm
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - LLM_PROVIDER=groq
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=https://cloud.langfuse.com
+      - EMBEDDING_PROVIDER=local
+    depends_on:
+      postgres: { condition: service_healthy }
+      chromadb: { condition: service_started }
+      minio: { condition: service_started }
+    volumes:
+      - ./backend:/app
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ipm
+      POSTGRES_PASSWORD: ipm
+      POSTGRES_DB: ipm
+    ports: [ "5432:5432" ]
+    volumes: [ "pg_data:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ipm" ]
+      interval: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:0.5.15
+    ports: [ "8001:8000" ]
+    volumes: [ "chroma_data:/chroma/chroma" ]
+    environment:
+      - IS_PERSISTENT=TRUE
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports: [ "9000:9000", "9001:9001" ]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes: [ "minio_data:/data" ]
+
+  frontend:
+    build: ./frontend
+    ports: [ "3000:3000" ]
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on: [ api ]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  pg_data:
+  chroma_data:
+  minio_data:
