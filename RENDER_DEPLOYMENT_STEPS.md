@@ -77,6 +77,10 @@ That avoids the `pydantic-core` source-build failure on the default runtime.
 7. Wait for deployment to complete
 8. Note your **Vercel URL** (e.g., `https://ipm-xxxxx.vercel.app`)
 
+If you change `NEXT_PUBLIC_API_URL` later, trigger a new Vercel redeploy so the
+frontend bundle picks up the updated backend URL. The app will otherwise keep
+using the value baked into the previous build.
+
 ---
 
 ## Step 4: Update CORS

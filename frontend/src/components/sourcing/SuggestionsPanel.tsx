@@ -44,8 +44,8 @@ export function SuggestionsPanel({ suggestions, isAnalyzing, hasPitch, onApply, 
             {error && !isAnalyzing && (
                 <div className="sug-empty">
                     <div className="sug-diamond" style={{ opacity: 0.4, color: "#f87171" }}>◆</div>
-                    <p style={{ color: "#f87171", fontSize: 12 }}>Backend unreachable</p>
-                    <p className="sug-sub">Make sure the API is running on port 8000</p>
+                    <p style={{ color: "#f87171", fontSize: 12 }}>API unreachable</p>
+                    <p className="sug-sub">Set NEXT_PUBLIC_API_URL in Vercel and redeploy the frontend.</p>
                 </div>
             )}
 

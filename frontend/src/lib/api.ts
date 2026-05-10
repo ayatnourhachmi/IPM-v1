@@ -4,10 +4,17 @@
 
 import type { AnalyzeResponse, BusinessNeed, CatalogProduct, CatalogSearchResponse, CreateNeedRequest, ExportReportRequest, GapAnalysisResponse, RecommendationsRequest, RecommendationsResponse, UpdateStatusRequest } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
+
+function getApiBaseUrl() {
+    if (!API_BASE) {
+        throw new Error("NEXT_PUBLIC_API_URL is not configured. Set it in Vercel and redeploy the frontend.");
+    }
+    return API_BASE;
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE}${path}`;
+    const url = `${getApiBaseUrl()}${path}`;
     const res = await fetch(url, {
         headers: { "Content-Type": "application/json", ...options.headers },
         ...options,
@@ -22,7 +29,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
-    const url = `${API_BASE}${path}`;
+    const url = `${getApiBaseUrl()}${path}`;
     const res = await fetch(url, {
         headers: { "Content-Type": "application/json", ...options.headers },
         ...options,
