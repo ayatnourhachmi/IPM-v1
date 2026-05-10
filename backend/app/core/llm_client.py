@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 from dataclasses import dataclass
 
 from app.core.config import settings
 from app.core.intent_prompt import build_intent_prompt
 
 logger = logging.getLogger(__name__)
+
+LLM_REQUEST_TIMEOUT_SECONDS = 20
 
 # ---------------------------------------------------------------------------
 # Langfuse prompt fallbacks (used when Langfuse is unreachable)
@@ -502,13 +505,23 @@ async def complete(
     built = _build_prompt(prompt_name, variables)
 
     if settings.llm_provider == "groq":
-        response = await _complete_groq(built.system_prompt, built.user_prompt, response_format)
+        call = _complete_groq(built.system_prompt, built.user_prompt, response_format)
         model_label = "llama-3.3-70b-versatile"
     elif settings.llm_provider == "azure":
-        response = await _complete_azure(built.system_prompt, built.user_prompt, response_format)
+        call = _complete_azure(built.system_prompt, built.user_prompt, response_format)
         model_label = settings.azure_openai_deployment or "azure-openai"
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
+
+    try:
+        response = await asyncio.wait_for(call, timeout=LLM_REQUEST_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError as exc:
+        logger.warning(
+            "LLM request timed out after %ss for prompt '%s'",
+            LLM_REQUEST_TIMEOUT_SECONDS,
+            prompt_name,
+        )
+        raise TimeoutError(f"LLM request timed out after {LLM_REQUEST_TIMEOUT_SECONDS}s") from exc
 
     if lf_parent_trace is not None:
         from app.core.langfuse_tracking import attach_llm_generation

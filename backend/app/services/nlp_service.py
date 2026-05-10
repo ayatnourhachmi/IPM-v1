@@ -249,6 +249,74 @@ def _build_horizon_context(horizon: str | None) -> str:
     return ctx
 
 
+def _domain_from_pitch(pitch: str) -> str:
+    text = pitch.lower()
+    if any(k in text for k in ("ai", "ml", "machine learning", "predict", "model", "llm", "chatbot", "nlp")):
+        return "IA"
+    if any(k in text for k in ("cloud", "aws", "azure", "saas", "kubernetes", "serverless", "migration")):
+        return "Cloud"
+    if any(k in text for k in ("security", "cyber", "compliance", "identity", "soc", "siem", "risk")):
+        return "Cybersecurite"
+    if any(k in text for k in ("data", "dashboard", "report", "analytics", "warehouse", "etl", "bi")):
+        return "Data"
+    if any(k in text for k in ("hr", "recruit", "talent", "employee", "workforce")):
+        return "RH"
+    if any(k in text for k in ("finance", "invoice", "payment", "budget", "account")):
+        return "Finance"
+    if any(k in text for k in ("process", "operations", "workflow", "automation", "rpa", "supply", "logistics")):
+        return "Operations"
+    return "Autre"
+
+
+def _objective_from_pitch(pitch: str, horizon: str | None, hints: RuleHints) -> str:
+    text = pitch.lower()
+    if hints.origine == "demande_client":
+        return "cx_improvement"
+    if any(k in text for k in ("security", "compliance", "audit", "breach", "fraud", "risk", "regulat")):
+        return "risk_mitigation"
+    if any(k in text for k in ("growth", "new market", "launch", "revenue", "expand", "customer")):
+        return "market_opportunity"
+    if horizon == "long_terme":
+        return "market_opportunity"
+    if any(k in text for k in ("customer", "user", "experience", "satisfaction", "service")):
+        return "cx_improvement"
+    return "cost_reduction"
+
+
+def _fallback_analyze_result(pitch: str, horizon: str | None, hints: RuleHints) -> tuple[Tags, list[Suggestion]]:
+    objective = _objective_from_pitch(pitch, horizon, hints)
+    domain = _domain_from_pitch(pitch)
+    impact = "Risk" if objective == "risk_mitigation" else ("CustomerExperience" if objective == "cx_improvement" else "Cost")
+    origem = hints.origine or ("probleme_operationnel" if objective != "market_opportunity" else "enjeu_marche")
+
+    tags = Tags(
+        objectif={"value": objective, "confidence": "medium"},
+        domaine=[{"value": domain, "confidence": "medium"}],
+        impact=[{"value": impact, "confidence": "medium"}],
+        origine={"value": origem, "confidence": "medium"},
+    )
+
+    pitch_summary = " ".join(pitch.strip().split())[:120]
+    if len(pitch_summary) > 110:
+        pitch_summary = pitch_summary[:110].rstrip() + "..."
+
+    suggestions = [
+        Suggestion(
+            label="Reformulation",
+            text=f"Clarify the need as: {pitch_summary}",
+        ),
+        Suggestion(
+            label="Business Precision",
+            text="Add a measurable target, owner, and deadline so the initiative can be evaluated.",
+        ),
+        Suggestion(
+            label="Value Angle",
+            text="State the expected business value in cost, risk, revenue, or customer experience terms.",
+        ),
+    ]
+    return tags, suggestions
+
+
 async def analyze_pitch(
     pitch: str,
     horizon: str | None = None,
@@ -301,21 +369,28 @@ async def analyze_pitch(
             lf_trace = None
 
     # 5. LLM — inject rules_context + horizon_context
-    response = await llm_client.complete(
-        prompt_name="nlp_tagging",
-        variables={
-            "pitch": pitch,
-            "rules_context": rules_context,
-            "horizon_context": horizon_context,
-            "explicit": "Classify the business need pitch into structured tags and suggest improvements.",
-            "implicit": "Provide actionable, business-relevant suggestions for clarity and value.",
-            "strategic": "Frame DXC as a trusted delivery partner in all suggestions.",
-        },
-        response_format="json",
-        lf_parent_trace=lf_trace,
-    )
-    parsed = llm_client.parse_json_response(response)
-    logger.info("LLM response keys: %s", list(parsed.keys()))
+    try:
+        response = await llm_client.complete(
+            prompt_name="nlp_tagging",
+            variables={
+                "pitch": pitch,
+                "rules_context": rules_context,
+                "horizon_context": horizon_context,
+                "explicit": "Classify the business need pitch into structured tags and suggest improvements.",
+                "implicit": "Provide actionable, business-relevant suggestions for clarity and value.",
+                "strategic": "Frame DXC as a trusted delivery partner in all suggestions.",
+            },
+            response_format="json",
+            lf_parent_trace=lf_trace,
+        )
+        parsed = llm_client.parse_json_response(response)
+        logger.info("LLM response keys: %s", list(parsed.keys()))
+    except TimeoutError as exc:
+        logger.warning("LLM analysis timed out; using deterministic fallback for analyze_pitch: %s", exc)
+        tags, suggestions = _fallback_analyze_result(pitch, horizon, hints)
+        _l1_set(key, tags, suggestions)
+        await _l2_set(key, pitch, horizon, tags, suggestions)
+        return tags, suggestions
 
     raw_tags = parsed.get("tags", parsed)  # support both nested and flat responses
 
