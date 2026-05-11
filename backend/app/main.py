@@ -125,6 +125,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger.info("Database tables ensured.")
 
+    if not settings.pinecone_configured:
+        logger.warning(
+            "Pinecone is not configured — catalog search and vector upserts are skipped. "
+            "Set PINECONE_API_KEY and PINECONE_INDEX on Render (both non-empty). "
+            "api_key_nonempty=%s index_nonempty=%s",
+            bool(settings.pinecone_api_key.strip()),
+            bool(settings.pinecone_index_name.strip()),
+        )
+
     # Run heavy non-critical startup work in background.
     asyncio.create_task(_run_post_startup_tasks())
 

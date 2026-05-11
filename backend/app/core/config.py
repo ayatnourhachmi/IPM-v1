@@ -1,8 +1,9 @@
 """Pydantic Settings — all environment variables for the IPM backend."""
 
-from pydantic_settings import BaseSettings
-from pydantic import AliasChoices, Field
+import os
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
 
 class Settings(BaseSettings):
     """Central configuration loaded from environment variables."""
@@ -31,8 +32,15 @@ class Settings(BaseSettings):
     minio_secure: bool = False
 
     # --- Pinecone (vector store; replaces ChromaDB) ---
-    pinecone_api_key: str = ""
-    pinecone_index_name: str = Field(default="", env="PINECONE_INDEX")
+    # Explicit aliases so Render / Docker env vars always bind (not only auto-generated names).
+    pinecone_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("PINECONE_API_KEY"),
+    )
+    pinecone_index_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("PINECONE_INDEX"),
+    )
     pinecone_cloud: str = Field(default="aws", env="PINECONE_CLOUD")
     # Accept legacy PINECONE_ENVIRONMENT (older docs) as fallback for serverless region.
     pinecone_region: str = Field(
@@ -60,7 +68,15 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
-    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    # In production, read only OS env (Render dashboard) — avoids an empty committed `.env`
+    # shadowing or confusing optional keys. Local dev still loads `.env`.
+    model_config = SettingsConfigDict(
+        env_file=None if os.environ.get("ENVIRONMENT") == "production" else ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        env_ignore_empty=True,
+    )
 
     @property
     def cors_origins(self) -> list[str]:
