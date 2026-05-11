@@ -6,7 +6,7 @@ export type Horizon = "court_terme" | "moyen_terme" | "long_terme";
 
 export type Status = "draft" | "submitted" | "solutions_reviewed" | "selected" | "rework" | "abandoned" | "in_qualification" | "delivery";
 
-export type Objectif = "cost_reduction" | "cx_improvement" | "risk_mitigation" | "market_opportunity";
+export type Objectif = "cost_reduction" | "cx_improvement" | "risk_mitigation" | "market_opportunity" | "productivity" | "innovation";
 
 export type Origine = "enjeu_marche" | "probleme_operationnel" | "demande_client";
 
@@ -249,4 +249,6 @@ export const OBJECTIF_LABELS: Record<Objectif, string> = {
     cx_improvement: "CX Improvement",
     risk_mitigation: "Risk Mitigation",
     market_opportunity: "Market Opportunity",
+    productivity: "Productivity",
+    innovation: "Innovation",
 };

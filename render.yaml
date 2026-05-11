@@ -28,7 +28,7 @@ services:
         sync: false
       # Create the index manually in Pinecone (cosine, dim=384) or set AUTO_CREATE_INDEX true.
       - key: PINECONE_INDEX
-        value: ipm-v1
+        value: ipm-vectors
       - key: PINECONE_REGION
         value: us-east-1
       - key: PINECONE_CLOUD

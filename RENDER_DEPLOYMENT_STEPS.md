@@ -29,7 +29,7 @@
 6. Go to **Environment** tab and add these variables:
 
 ```
-DATABASE_URL=postgresql+asyncpg://neondb_owner:npg_LipYrFgv09fh@ep-sparkling-union-alqduuoa.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=<your Neon async SQLAlchemy URL, ending with ?sslmode=require if Neon provides it>
 
 ENVIRONMENT=production
 DEBUG=false
@@ -40,11 +40,16 @@ GROQ_API_KEY=[REDACTED]
 
 EMBEDDING_PROVIDER=local
 
-PINECONE_API_KEY=pcsk_7UCcrA_51nicyNiXkzYinGytc9RRXo42CFy2JRPJ743oEeJ1biVveEX8NBtewBttqcFQcy
-PINECONE_ENVIRONMENT=us-east1-gcp
+PINECONE_API_KEY=<your Pinecone API key>
+PINECONE_INDEX=ipm-vectors
+PINECONE_REGION=<your Pinecone index region, for example us-east-1>
+PINECONE_CLOUD=aws
+PINECONE_INDEX_DIMENSION=384
+PINECONE_AUTO_CREATE_INDEX=false
+PINECONE_SEED_CATALOG_ON_STARTUP=true
 
-LANGFUSE_PUBLIC_KEY=pk-lf-d07e61d5-7b44-4fd5-a0ef-b5b26ada9e71
-LANGFUSE_SECRET_KEY=sk-lf-54c745e2-01dd-43d7-8625-a85f13c4e3e2
+LANGFUSE_PUBLIC_KEY=<your Langfuse public key>
+LANGFUSE_SECRET_KEY=<your Langfuse secret key>
 LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 

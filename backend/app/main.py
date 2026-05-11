@@ -184,11 +184,28 @@ async def health_check() -> dict[str, object]:
 
 
 @app.get("/health/configuration")
-async def health_configuration() -> dict[str, bool | str]:
+async def health_configuration() -> dict[str, bool | int | str]:
     """Non-secret wiring check — use after changing Render env vars (no API keys echoed)."""
+    catalog_vector_count: int | str = "unavailable"
+    if settings.pinecone_configured:
+        try:
+            from app.core.pinecone_store import NS_DXC_CATALOG, namespace_vector_count
+
+            catalog_vector_count = namespace_vector_count(NS_DXC_CATALOG)
+        except Exception as exc:
+            catalog_vector_count = f"error: {exc.__class__.__name__}"
+
     return {
         "environment": settings.environment,
         "pinecone_api_key_present": bool(settings.pinecone_api_key.strip()),
         "pinecone_index_present": bool(settings.pinecone_index_name.strip()),
         "pinecone_configured": settings.pinecone_configured,
+        "dxc_catalog_vector_count": catalog_vector_count,
+        "llm_provider": settings.llm_provider,
+        "groq_api_key_present": bool(settings.groq_api_key.strip()),
+        "azure_openai_configured": bool(
+            settings.azure_openai_api_key.strip()
+            and settings.azure_openai_endpoint.strip()
+            and settings.azure_openai_deployment.strip()
+        ),
     }

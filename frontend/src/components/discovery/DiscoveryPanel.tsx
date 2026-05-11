@@ -135,6 +135,7 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
     const [catalog1Products, setCatalog1Products] = useState<CatalogProduct[]>([]);
     const [catalog1Loading, setCatalog1Loading] = useState(false);
     const [catalogSearchHint, setCatalogSearchHint] = useState<string | null>(null);
+    const [catalogSearchError, setCatalogSearchError] = useState<string | null>(null);
     const [gapAnalysis, setGapAnalysis] = useState<GapState>({
         itemId: null, data: null, loading: false, error: false,
     });
@@ -182,9 +183,13 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
     // Panel 1 — launch: call catalog-search API; fall back silently on error or missing needId
     const handleCatalogLaunch = useCallback(async () => {
         setCardState("dxc_catalog", "active");
-        if (!needId) return;
+        if (!needId) {
+            setCatalogSearchError("Missing business need id. Open Discovery from a saved need so the backend can search the catalog.");
+            return;
+        }
         setCatalog1Loading(true);
         setCatalogSearchHint(null);
+        setCatalogSearchError(null);
         try {
             const resp = await searchCatalog(needId);
             setCatalogSearchHint(resp.hint ?? null);
@@ -195,8 +200,10 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
                 relevance: Math.round(p.relevance_score * 100),
             })));
             setCatalog1Products(resp.results);
-        } catch {
-            // fall back to empty items silently
+        } catch (err) {
+            setCatalog1Items([]);
+            setCatalog1Products([]);
+            setCatalogSearchError(err instanceof Error ? err.message : "Catalog search failed. Check the API deployment logs.");
         } finally {
             setCatalog1Loading(false);
         }
@@ -351,6 +358,15 @@ export function DiscoveryPanel({ needId, onSelectionChange, onCardStatesChange, 
                                 {catalog1Loading ? (
                                     <div className="disc-item" style={{ justifyContent: "center", borderBottom: "none" }}>
                                         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading catalog…</span>
+                                    </div>
+                                ) : catalogSearchError ? (
+                                    <div className="disc-item" style={{ flexDirection: "column", alignItems: "flex-start", borderBottom: "none", gap: 6 }}>
+                                        <span style={{ fontSize: 12, color: "var(--wf-destructive)" }}>
+                                            Catalog API unavailable.
+                                        </span>
+                                        <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45, wordBreak: "break-word" }}>
+                                            {catalogSearchError}
+                                        </span>
                                     </div>
                                 ) : catalog1Items.length === 0 ? (
                                     <div className="disc-item" style={{ flexDirection: "column", alignItems: "flex-start", borderBottom: "none", gap: 6 }}>

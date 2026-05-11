@@ -4,13 +4,32 @@
 
 import type { AnalyzeResponse, BusinessNeed, CatalogProduct, CatalogSearchResponse, CreateNeedRequest, ExportReportRequest, GapAnalysisResponse, RecommendationsRequest, RecommendationsResponse, UpdateStatusRequest } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "")).replace(/\/+$/, "");
 
 function getApiBaseUrl() {
     if (!API_BASE) {
         throw new Error("NEXT_PUBLIC_API_URL is not configured. Set it in Vercel and redeploy the frontend.");
     }
     return API_BASE;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    if (!error) return fallback;
+    if (typeof error === "string") return error;
+    if (Array.isArray(error)) {
+        return error
+            .map((item) => {
+                if (typeof item === "string") return item;
+                if (item && typeof item === "object" && "msg" in item) return String(item.msg);
+                return JSON.stringify(item);
+            })
+            .join("; ");
+    }
+    if (typeof error === "object") {
+        if ("detail" in error) return getErrorMessage((error as { detail: unknown }).detail, fallback);
+        if ("message" in error) return String((error as { message: unknown }).message);
+    }
+    return fallback;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -22,7 +41,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(error.detail || `API error: ${res.status}`);
+        throw new Error(getErrorMessage(error, `API error: ${res.status}`));
     }
 
     return res.json() as Promise<T>;
@@ -37,7 +56,7 @@ async function requestBlob(path: string, options: RequestInit = {}): Promise<Blo
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(error.detail || `API error: ${res.status}`);
+        throw new Error(getErrorMessage(error, `API error: ${res.status}`));
     }
 
     return res.blob();

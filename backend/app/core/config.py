@@ -23,7 +23,10 @@ class Settings(BaseSettings):
     # --- CORS ---
     # Keep the raw environment value as a string to avoid pydantic-settings
     # attempting JSON decoding of complex types during env parsing.
-    cors_origins_raw: str = Field(default="http://localhost:3000", env="CORS_ORIGINS")
+    cors_origins_raw: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("CORS_ORIGINS"),
+    )
 
     # --- MinIO ---
     minio_endpoint: str = "minio:9000"
@@ -41,15 +44,24 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("PINECONE_INDEX"),
     )
-    pinecone_cloud: str = Field(default="aws", env="PINECONE_CLOUD")
+    pinecone_cloud: str = Field(default="aws", validation_alias=AliasChoices("PINECONE_CLOUD"))
     # Accept legacy PINECONE_ENVIRONMENT (older docs) as fallback for serverless region.
     pinecone_region: str = Field(
         default="us-east-1",
         validation_alias=AliasChoices("PINECONE_REGION", "PINECONE_ENVIRONMENT"),
     )
-    pinecone_index_dimension: int = Field(default=384, env="PINECONE_INDEX_DIMENSION")
-    pinecone_auto_create_index: bool = Field(default=False, env="PINECONE_AUTO_CREATE_INDEX")
-    pinecone_seed_catalog_on_startup: bool = Field(default=True, env="PINECONE_SEED_CATALOG_ON_STARTUP")
+    pinecone_index_dimension: int = Field(
+        default=384,
+        validation_alias=AliasChoices("PINECONE_INDEX_DIMENSION"),
+    )
+    pinecone_auto_create_index: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PINECONE_AUTO_CREATE_INDEX"),
+    )
+    pinecone_seed_catalog_on_startup: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("PINECONE_SEED_CATALOG_ON_STARTUP"),
+    )
 
     # --- LLM Provider ---
     llm_provider: str = "groq"  # "groq" | "azure"
